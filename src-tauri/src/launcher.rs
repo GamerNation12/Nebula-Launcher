@@ -105,8 +105,8 @@ pub async fn install_modpack_with_shared_storage<F>(
 where
     F: Fn(String, f32, String) + Send + Sync + 'static + Clone,
 {
-    // Validate URL is present for installation
-    if modpack.url_modpack_zip.is_empty() {
+    // Validate URL is present for installation (Bypass if it's external/Modrinth which downloads via index files)
+    if modpack.url_modpack_zip.is_empty() && !modpack.is_modrinth.unwrap_or(false) {
         return Err(anyhow!("Modpack download URL cannot be empty for installation"));
     }
 

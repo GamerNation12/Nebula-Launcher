@@ -1321,13 +1321,13 @@ export function LauncherProvider({ children }: { children: ReactNode }) {
 
       // Add context for repair actions
       const isRepairAction = action === 'repair';
-      const repairPrefix = isRepairAction ? 'reparación' : (action === 'install' ? 'instalación' : action === 'update' ? 'actualización' : action);
+      const repairPrefix = isRepairAction ? 'repair' : (action === 'install' ? 'installation' : action === 'update' ? 'updating' : action);
 
       // Check for integrity errors (anti-cheat)
       if (errorMessage.includes('verificación de integridad') || errorMessage.includes('modificaciones no autorizadas')) {
         // Parse issues from error message
         const issuesMatch = errorMessage.match(/• ([^\n]+)/g);
-        const issues = issuesMatch ? issuesMatch.map(i => i.replace('• ', '')) : ['Archivo modificado o no autorizado'];
+        const issues = issuesMatch ? issuesMatch.map(i => i.replace('• ', '')) : ['Modified or unauthorized file'];
 
         setIntegrityErrorDialog({
           isOpen: true,
@@ -1354,7 +1354,7 @@ export function LauncherProvider({ children }: { children: ReactNode }) {
         setIntegrityErrorDialog({
           isOpen: true,
           modpackId,
-          issues: ['La descarga del modpack está corrupta. Vuelve a intentar la instalación.']
+          issues: ['The modpack download is corrupt. Please try the installation again.']
         });
 
         dispatch({
@@ -1371,32 +1371,32 @@ export function LauncherProvider({ children }: { children: ReactNode }) {
       }
 
       if (errorMessage.includes('429') || errorMessage.includes('rate limit') || errorMessage.includes('too many requests')) {
-        userFriendlyError = `Error durante la ${repairPrefix}: Límite de solicitudes alcanzado. Crea una cuenta de LuminaKraft para aumentar tus límites.`;
+        userFriendlyError = `Error during ${repairPrefix}: Rate limit reached. Create a LuminaKraft account to increase your limits.`;
       } else if (errorMessage.includes('failed to extract zip file') || errorMessage.includes('no such file or directory')) {
-        userFriendlyError = `Error durante la ${repairPrefix}: No se pudo extraer el archivo ZIP`;
+        userFriendlyError = `Error during ${repairPrefix}: Failed to extract ZIP file`;
       } else if (errorMessage.includes('java') || errorMessage.includes('No such file or directory') || errorMessage.includes('exec format error')) {
-        userFriendlyError = `Error durante la ${repairPrefix}: Java no válido o no encontrado`;
+        userFriendlyError = `Error during ${repairPrefix}: Java invalid or not found`;
       } else if (errorMessage.includes('zip file not found') || errorMessage.includes('file not found')) {
-        userFriendlyError = `Error durante la ${repairPrefix}: Archivo ZIP no encontrado`;
+        userFriendlyError = `Error during ${repairPrefix}: ZIP file not found`;
       } else if (errorMessage.includes('permission denied')) {
-        userFriendlyError = `Error durante la ${repairPrefix}: Permisos insuficientes`;
+        userFriendlyError = `Error during ${repairPrefix}: Insufficient permissions`;
       } else if (errorMessage.includes('no space left') || errorMessage.includes('disk space')) {
-        userFriendlyError = `Error durante la ${repairPrefix}: Espacio en disco insuficiente`;
+        userFriendlyError = `Error during ${repairPrefix}: Insufficient disk space`;
       } else if (errorMessage.includes('corrupted') || errorMessage.includes('invalid zip')) {
-        userFriendlyError = `Error durante la ${repairPrefix}: Archivo corrupto o inválido`;
+        userFriendlyError = `Error during ${repairPrefix}: Corrupt or invalid file`;
       } else if (errorMessage.includes('network') || errorMessage.includes('connection')) {
-        userFriendlyError = `Error durante la ${repairPrefix}: Problema de conexión de red`;
+        userFriendlyError = `Error during ${repairPrefix}: Network connection problem`;
       } else if (errorMessage.includes('failed to download')) {
-        userFriendlyError = `Error durante la ${repairPrefix}: Fallo en la descarga`;
+        userFriendlyError = `Error during ${repairPrefix}: Download failed`;
       } else if (errorMessage.includes('authentication failed (401)') ||
         errorMessage.includes('not authorized') ||
         errorMessage.includes('curseforge api authentication failed')) {
-        userFriendlyError = `Error durante la ${repairPrefix}: Autenticación fallida con CurseForge`;
+        userFriendlyError = `Error during ${repairPrefix}: Authentication failed with CurseForge`;
       } else if (errorMessage.includes('access forbidden (403)') ||
         errorMessage.includes('curseforge api access forbidden')) {
-        userFriendlyError = `Error durante la ${repairPrefix}: Acceso prohibido a CurseForge`;
+        userFriendlyError = `Error during ${repairPrefix}: Access forbidden to CurseForge`;
       } else if (errorMessage.includes('curseforge api') || errorMessage.includes('failed to retrieve any mod file information')) {
-        userFriendlyError = `Error durante la ${repairPrefix}: Problema con la API de CurseForge`;
+        userFriendlyError = `Error during ${repairPrefix}: Issue with CurseForge API`;
       } else {
         // Use the original error message as fallback, but add context for repair
         let originalError = '';
@@ -1411,11 +1411,11 @@ export function LauncherProvider({ children }: { children: ReactNode }) {
         }
 
         // If the error already mentions repair context, keep it as is
-        if (originalError.toLowerCase().includes('reparación') ||
+        if (originalError.toLowerCase().includes('repair') ||
           originalError.toLowerCase().includes('repair')) {
           userFriendlyError = originalError;
         } else {
-          userFriendlyError = `Error durante la ${repairPrefix}: ${originalError}`;
+          userFriendlyError = `Error during ${repairPrefix}: ${originalError}`;
         }
       }
 

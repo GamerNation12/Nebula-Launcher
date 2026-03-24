@@ -280,11 +280,14 @@ where
     F: Fn(String, f32, String) + Send + Sync + 'static + Clone,
 {
     let client = Client::builder()
-        .timeout(std::time::Duration::from_secs(60))
-        .no_gzip() // Disable automatic decompression for Mojang raw files to avoid body decode errors
+        .timeout(std::time::Duration::from_secs(300)) // Increased to 5 minutes to prevent large file timeouts under heavy load
+        .no_gzip()    // Disable automatic decompression for Mojang raw files to avoid body decode errors
+        .no_deflate() // Disable deflate
+        .no_brotli()  // Disable brotli
         .build()?;
 
-    let download_semaphore = Arc::new(Semaphore::new(config.max_concurrent_downloads));
+    let max_downloads = config.max_concurrent_downloads.min(15);
+    let download_semaphore = Arc::new(Semaphore::new(max_downloads));
     let write_semaphore = Arc::new(Semaphore::new(config.max_concurrent_writes));
 
     // Emit initial progress
@@ -474,21 +477,21 @@ where
                         Ok(response) if response.status().is_success() => {
                             match response.bytes().await {
                                 Ok(bytes) => break Ok(bytes),
-                                Err(e) if attempts < 3 => {
-                                    println!("⚠️ Read error ({}), retrying file ({})...", e, file.url);
-                                    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                                Err(_e) if attempts < 5 => {
+                                    println!("⚠️ Read error, retrying file ({})...", file.url);
+                                    tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
                                 }
                                 Err(e) => break Err(anyhow!("Failed to read bytes from {}: {}", file.url, e)),
                             }
                         }
                         Ok(response) => {
-                            if attempts >= 3 {
+                            if attempts >= 5 {
                                 break Err(anyhow!("HTTP {} for {}", response.status(), file.url));
                             }
-                            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                            tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
                         }
-                        Err(e) if attempts < 3 => {
-                            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                        Err(e) if attempts < 5 => {
+                            tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
                         }
                         Err(e) => break Err(anyhow!("Download failed for {}: {}", file.url, e)),
                     }

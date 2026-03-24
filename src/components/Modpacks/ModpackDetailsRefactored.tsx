@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeft, Download, Clock, Users, Terminal, Info, Image, History, Loader2 } from 'lucide-react';
+import { ArrowLeft, Download, Clock, Users, Terminal, Info, Image, History, Loader2, Package, Globe } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import LogsSection from './Details/Sections/LogsSection';
 import ScreenshotsSection from './Details/Sections/ScreenshotsSection';
 import VersionsSection from './Details/Sections/VersionsSection';
+import ModsSection from './Details/Sections/ModsSection';
+import WorldsSection from './Details/Sections/WorldsSection';
 import { listen } from '@tauri-apps/api/event';
 import type { Modpack, ModpackState, ProgressInfo } from '../../types/launcher';
 import { useLauncher } from '../../contexts/LauncherContext';
@@ -55,7 +57,7 @@ const ModpackDetailsRefactored: React.FC<ModpackDetailsProps> = ({ modpack, stat
 
   // Logs state
   const [logs, setLogs] = React.useState<string[]>([]);
-  const [activeTab, setActiveTab] = useState<'content' | 'logs' | 'screenshots' | 'versions'>('content');
+  const [activeTab, setActiveTab] = useState<'content' | 'logs' | 'screenshots' | 'versions' | 'mods' | 'worlds'>('content');
 
   // Stats state
   const [stats, setStats] = useState({
@@ -465,6 +467,31 @@ const ModpackDetailsRefactored: React.FC<ModpackDetailsProps> = ({ modpack, stat
                     )}
                   </button>
                 )}
+
+                {!isReadOnly && liveState.installed && (
+                  <>
+                    <button
+                      onClick={() => setActiveTab('mods')}
+                      className={`flex items-center space-x-2 px-4 py-2 rounded-md font-medium transition-all duration-75 ${activeTab === 'mods'
+                        ? 'bg-lumina-600 text-white shadow-lg'
+                        : 'text-dark-300 hover:text-white hover:bg-dark-700'
+                        }`}
+                    >
+                      <Package className="w-4 h-4" />
+                      <span>{t('modpacks.mods', 'Mods')}</span>
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('worlds')}
+                      className={`flex items-center space-x-2 px-4 py-2 rounded-md font-medium transition-all duration-75 ${activeTab === 'worlds'
+                        ? 'bg-lumina-600 text-white shadow-lg'
+                        : 'text-dark-300 hover:text-white hover:bg-dark-700'
+                        }`}
+                    >
+                      <Globe className="w-4 h-4" />
+                      <span>{t('modpacks.worlds', 'Worlds')}</span>
+                    </button>
+                  </>
+                )}
                 {/* Versions Tab - Only show in Explore mode (read-only) */}
                 {isReadOnly && (
                   <button
@@ -485,6 +512,8 @@ const ModpackDetailsRefactored: React.FC<ModpackDetailsProps> = ({ modpack, stat
                 {activeTab === 'content' && renderContentTab()}
                 {activeTab === 'logs' && <LogsSection logs={logs} modpackId={modpack.id} />}
                 {activeTab === 'screenshots' && <ScreenshotsSection images={modpack.images} modpackName={displayName} />}
+                {activeTab === 'mods' && <ModsSection modpackId={modpack.id} />}
+                {activeTab === 'worlds' && <WorldsSection modpackId={modpack.id} />}
                 {activeTab === 'versions' && (
                   <VersionsSection
                     modpackId={modpack.id}

@@ -820,4 +820,124 @@ pub async fn save_modpack_image(
     }
 
     Ok(())
-} 
+}
+
+/// List mods in the given instance
+pub fn list_instance_mods(modpack_id: &str) -> Result<Vec<serde_json::Value>> {
+    let instance_dir = get_instance_dir(modpack_id)?;
+    if !instance_dir.exists() {
+        return Err(anyhow!("Instance not found"));
+    }
+
+    let mods_dir = if instance_dir.join(".minecraft").join("mods").exists() {
+        instance_dir.join(".minecraft").join("mods")
+    } else {
+        instance_dir.join("mods")
+    };
+
+    if !mods_dir.exists() {
+        return Ok(Vec::new());
+    }
+
+    let mut mods_list = Vec::new();
+    let entries = fs::read_dir(mods_dir)?;
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_file() {
+            if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
+                let is_disabled = filename.ends_with(".disabled");
+                let is_jar = filename.ends_with(".jar") || filename.contains(".jar.disabled");
+                if is_jar {
+                    mods_list.push(serde_json::json!({
+                        "name": filename.to_string(),
+                        "enabled": !is_disabled
+                    }));
+                }
+            }
+        }
+    }
+
+    Ok(mods_list)
+}
+
+/// Toggle mod status (enable/disable by renaming extension)
+pub fn toggle_mod_status(modpack_id: &str, mod_name: &str, enabled: bool) -> Result<()> {
+    let instance_dir = get_instance_dir(modpack_id)?;
+    let mods_dir = if instance_dir.join(".minecraft").join("mods").exists() {
+        instance_dir.join(".minecraft").join("mods")
+    } else {
+        instance_dir.join("mods")
+    };
+
+    if !mods_dir.exists() {
+        return Err(anyhow!("Mods directory not found"));
+    }
+
+    let current_path = mods_dir.join(mod_name);
+    if !current_path.exists() {
+        return Err(anyhow!("Mod file not found: {}", mod_name));
+    }
+
+    let is_disabled = mod_name.ends_with(".disabled");
+    let new_name = if enabled {
+        if is_disabled {
+            mod_name.strip_suffix(".disabled").unwrap().to_string()
+        } else {
+            mod_name.to_string()
+        }
+    } else {
+        if !is_disabled {
+            format!("{}.disabled", mod_name)
+        } else {
+            mod_name.to_string()
+        }
+    };
+
+    if new_name != mod_name {
+        let dest_path = mods_dir.join(new_name);
+        fs::rename(&current_path, &dest_path)?;
+    }
+
+    Ok(())
+}
+
+/// List worlds in the given instance
+pub fn list_instance_worlds(modpack_id: &str) -> Result<Vec<serde_json::Value>> {
+    let instance_dir = get_instance_dir(modpack_id)?;
+    if !instance_dir.exists() {
+        return Err(anyhow!("Instance not found"));
+    }
+
+    let saves_dir = if instance_dir.join(".minecraft").join("saves").exists() {
+        instance_dir.join(".minecraft").join("saves")
+    } else {
+        instance_dir.join("saves")
+    };
+
+    if !saves_dir.exists() {
+        return Ok(Vec::new());
+    }
+
+    let mut worlds_list = Vec::new();
+    let entries = fs::read_dir(saves_dir)?;
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            if let Some(folder_name) = path.file_name().and_then(|n| n.to_str()) {
+                let metadata = fs::metadata(&path)?;
+                let modified = metadata.modified()?;
+                let datetime: chrono::DateTime<chrono::Utc> = modified.into();
+                
+                worlds_list.push(serde_json::json!({
+                    "name": folder_name.to_string(),
+                    "last_played": datetime.to_rfc3339()
+                }));
+            }
+        }
+    }
+
+    Ok(worlds_list)
+}
+ 

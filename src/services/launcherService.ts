@@ -734,6 +734,7 @@ class LauncherService {
       fileSha256: modpack.fileSha256 || null, // For download verification
       allowCustomMods: modpack.allowCustomMods, // Pass boolean directly (defaults to true in Rust if undefined)
       allowCustomResourcepacks: modpack.allowCustomResourcepacks,
+      isModrinth: modpack.isModrinth || false, // Forward isModrinth flag to bypass zip validation
     };
 
 

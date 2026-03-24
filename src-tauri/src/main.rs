@@ -79,6 +79,9 @@ pub struct Modpack {
     /// If false, aggressive cleanup removes user-added resource packs
     #[serde(rename = "allowCustomResourcepacks")]
     pub allow_custom_resourcepacks: Option<bool>,
+    /// Whether this is a Modrinth modpack (bypasses direct .zip validation)
+    #[serde(rename = "isModrinth", default)]
+    pub is_modrinth: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -509,6 +512,7 @@ async fn repair_minecraft(app: tauri::AppHandle, modpack_id: String, settings: U
         file_sha256: None,
         allow_custom_mods: None,
         allow_custom_resourcepacks: None,
+        is_modrinth: None,
     };
     
     let instance_dir = filesystem::get_instance_dir(&modpack_id)
@@ -1449,6 +1453,21 @@ fn main() {
         }
     }
 
+    #[tauri::command]
+    async fn list_instance_mods(modpack_id: String) -> Result<Vec<serde_json::Value>, String> {
+        filesystem::list_instance_mods(&modpack_id).map_err(|e| e.to_string())
+    }
+
+    #[tauri::command]
+    async fn toggle_mod_status(modpack_id: String, mod_name: String, enabled: bool) -> Result<(), String> {
+        filesystem::toggle_mod_status(&modpack_id, &mod_name, enabled).map_err(|e| e.to_string())
+    }
+
+    #[tauri::command]
+    async fn list_instance_worlds(modpack_id: String) -> Result<Vec<serde_json::Value>, String> {
+        filesystem::list_instance_worlds(&modpack_id).map_err(|e| e.to_string())
+    }
+
     tauri::Builder::default()
         .manage(oauth::OAuthServerState::default())
         .plugin(tauri_plugin_opener::init())
@@ -1503,6 +1522,9 @@ fn main() {
             read_instance_log,
             oauth::start_oauth_server,
             oauth::stop_oauth_server,
+            list_instance_mods,
+            toggle_mod_status,
+            list_instance_worlds,
         ])
         .setup(|app| {
             // Initialize app data directory
