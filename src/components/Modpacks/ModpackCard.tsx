@@ -73,7 +73,7 @@ const ModpackCard: React.FC<ModpackCardProps> = memo(({ modpack, state, onSelect
   const handleInstall = async () => {
     // Save full modpack data to localStorage so MyModpacksPage can use it during installation
     try {
-      localStorage.setItem(`installing_modpack_${modpack.id}`, JSON.stringify(modpack));
+      localStorage.setItem(`installing_modpack_${modpack.id}`, JSON.stringify({ ...modpack, isModrinth: true }));
     } catch (error) {
       console.error('Failed to save modpack to localStorage:', error);
     }
