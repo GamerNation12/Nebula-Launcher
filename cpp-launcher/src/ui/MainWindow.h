@@ -4,10 +4,8 @@
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QWidget>
-#include <QPushButton>
+#include <QWebEngineView>
 #include "../network/APIService.h"
-#include <QStackedWidget>
-#include "ModpackDetailView.h"
 #include "../Launcher.h"
 
 /**
@@ -30,22 +28,10 @@ private slots:
 
 private:
     QWidget *centralWidget;
-    QHBoxLayout *mainLayout; // Sidebar + Content area
-    
-    // Sidebar Navigation
-    QWidget *sidebar;
-    QVBoxLayout *sidebarLayout;
-
-    // Main Content
-    QWidget *contentArea;
-    QVBoxLayout *contentLayout;
+    QVBoxLayout *mainLayout;
+    QWebEngineView *webView;
 
     APIService *apiService;
-    QWidget *gridLayoutWidget; // Grid Canvas container
-
-    QStackedWidget *stackedWidget;
-    QWidget *dashboardView;
-    ModpackDetailView *detailView;
 
     Launcher *launcher;
 };

@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { invoke } from '@tauri-apps/api/core';
-import { User, HardDrive, Save, Wifi, WifiOff, RefreshCw, Trash2, Server, Languages, XCircle, Zap, Shield } from 'lucide-react';
+import { User, HardDrive, Save, Wifi, WifiOff, RefreshCw, Trash2, Server, Languages, XCircle, Zap, Shield, Cpu, Terminal } from 'lucide-react';
 import { useLauncher } from '../../contexts/LauncherContext';
 import LauncherService from '../../services/launcherService';
 import MetaStorageSettings from './MetaStorageSettings';
 import toast from 'react-hot-toast';
+import { useLuminaCore } from '../../hooks/useLuminaCore';
 
 interface SettingsPageProps {
   onNavigationBlocked?: () => void;
@@ -14,6 +15,7 @@ interface SettingsPageProps {
 const SettingsPage: React.FC<SettingsPageProps> = ({ onNavigationBlocked }) => {
   const { t } = useTranslation();
   const { userSettings, updateUserSettings, currentLanguage, changeLanguage, hasActiveOperations } = useLauncher();
+  const { isConnected, lastMessage, startCore, sendCommand } = useLuminaCore();
 
   const [formData, setFormData] = useState(userSettings);
   const [hasChanges, setHasChanges] = useState(false);
@@ -489,6 +491,46 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onNavigationBlocked }) => {
                     <span>{MIN_RAM} MB</span>
                     <span>{MAX_RAM} MB</span>
                   </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Native Engine Connection */}
+          <div className="card">
+            <div className="flex items-center space-x-3 mb-6">
+              <Cpu className="w-6 h-6 text-lumina-500" />
+              <h2 className="text-white text-xl font-semibold">Native C++ Engine</h2>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex items-center justify-between p-4 bg-dark-700 rounded-lg">
+                <div className="flex items-center space-x-3">
+                  <Terminal className={`w-5 h-5 ${isConnected ? 'text-green-500' : 'text-dark-400'}`} />
+                  <div>
+                    <p className={`font-medium ${isConnected ? 'text-green-400' : 'text-dark-400'}`}>
+                      {isConnected ? 'Connected to LuminaCore' : 'Disconnected'}
+                    </p>
+                    <p className="text-dark-400 text-sm">
+                      {lastMessage ? `Last action: ${lastMessage.action || lastMessage.status}` : 'Waiting for connection...'}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex space-x-2">
+                  <button
+                    onClick={startCore}
+                    disabled={isConnected}
+                    className="btn-primary inline-flex items-center space-x-2 disabled:opacity-50"
+                  >
+                    <span>Connect Engine</span>
+                  </button>
+                  <button
+                    onClick={() => sendCommand('ping')}
+                    disabled={!isConnected}
+                    className="btn-secondary inline-flex items-center space-x-2 disabled:opacity-50"
+                  >
+                    <span>Ping Core</span>
+                  </button>
                 </div>
               </div>
             </div>

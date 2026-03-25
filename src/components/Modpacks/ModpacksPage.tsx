@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Search, RefreshCw, AlertCircle, Download, Loader2 } from 'lucide-react';
+import { Search, RefreshCw, AlertCircle, Loader2 } from 'lucide-react';
 import { useLauncher } from '../../contexts/LauncherContext';
 import { useAnimation } from '../../contexts/AnimationContext';
 import ModpackCard from './ModpackCard';
@@ -47,6 +47,19 @@ const ModpacksPage: React.FC<ModpacksPageProps> = ({ initialModpackId, onNavigat
   const [offset, setOffset] = useState(0);
   const [isRemoteLoadingMore, setIsRemoteLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
+
+  const observer = useRef<IntersectionObserver | null>(null);
+  const lastModpackElementRef = useCallback((node: HTMLDivElement | null) => {
+    if (isRemoteLoading || isRemoteLoadingMore) return;
+    if (observer.current) observer.current.disconnect();
+    observer.current = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting && hasMore) {
+        // We use a timeout to avoid dispatching changes while React is rendering
+        setTimeout(() => loadMoreModpacks(), 0);
+      }
+    });
+    if (node) observer.current.observe(node);
+  }, [isRemoteLoading, isRemoteLoadingMore, hasMore]);
 
   // Handle initial modpack selection from navigation
   React.useEffect(() => {
@@ -516,21 +529,14 @@ const ModpacksPage: React.FC<ModpacksPageProps> = ({ initialModpackId, onNavigat
                   );
                 })}
 
-                {/* Load More Button */}
+                {/* Intersection Observer Target */}
                 {hasMore && modrinthModpacks.length >= 20 && (
-                  <div className="flex justify-center pt-4">
-                    <button
-                      onClick={loadMoreModpacks}
-                      disabled={isRemoteLoadingMore}
-                      className="flex items-center gap-2 bg-dark-800 hover:bg-dark-700 border border-dark-700/80 hover:border-dark-600 px-6 py-2.5 rounded-lg text-white font-medium text-sm transition-all duration-150 disabled:opacity-50"
-                    >
-                      {isRemoteLoadingMore ? (
-                        <Loader2 className="w-4 h-4 animate-spin text-emerald-400" />
-                      ) : (
-                        <Download className="w-4 h-4 text-dark-400" />
-                      )}
-                      <span>Load More</span>
-                    </button>
+                  <div ref={lastModpackElementRef} className="col-span-1 md:col-span-2 lg:col-span-3 flex justify-center items-center py-6">
+                    {isRemoteLoadingMore ? (
+                      <Loader2 className="w-8 h-8 animate-spin text-emerald-400" />
+                    ) : (
+                      <div className="w-8 h-8 opacity-0" />
+                    )}
                   </div>
                 )}
               </div>

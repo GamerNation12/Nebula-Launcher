@@ -10,7 +10,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # ---------------------------------------------------------------------------
 # To build this, you need to install Qt 6 via the Qt Online Installer
 # and make sure CMake can find it (e.g., set CMAKE_PREFIX_PATH to your Qt install).
-find_package(Qt6 REQUIRED COMPONENTS Widgets Core Network)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Core Network WebEngineCore WebEngineWidgets WebChannel)
 
 # Enable automatic compilation of Qt structures (MOC, UIC, RCC)
 set(CMAKE_AUTOMOC ON)
@@ -41,6 +41,9 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     Qt6::Widgets
     Qt6::Core
     Qt6::Network
+    Qt6::WebEngineCore
+    Qt6::WebEngineWidgets
+    Qt6::WebChannel
 )
 
 # Properties for Windows (hides console window)

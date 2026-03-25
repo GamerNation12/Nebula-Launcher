@@ -25,6 +25,8 @@ interface LauncherState {
   error: string | null;
   isOnline: boolean;
   userPermissions: UserPermissions | null;
+  isCoreConnected: boolean;
+  lastCoreMessage: any | null;
 }
 
 // User permissions cached at app level for fast access across all pages
@@ -74,6 +76,10 @@ interface LauncherContextType {
   isOnline: boolean;
   userPermissions: UserPermissions | null;
   refreshPermissions: () => Promise<void>;
+  isCoreConnected: boolean;
+  lastCoreMessage: any | null;
+  startCore: () => Promise<void>;
+  sendCoreCommand: (action: string, payload?: Record<string, any>) => Promise<void>;
 }
 
 type LauncherAction =
@@ -85,7 +91,9 @@ type LauncherAction =
   | { type: 'SET_MODPACK_STATE'; payload: { id: string; state: ModpackState } }
   | { type: 'UPDATE_MODPACK_PROGRESS'; payload: { id: string; progress: ProgressInfo } }
   | { type: 'SET_ONLINE'; payload: boolean }
-  | { type: 'SET_USER_PERMISSIONS'; payload: UserPermissions | null };
+  | { type: 'SET_USER_PERMISSIONS'; payload: UserPermissions | null }
+  | { type: 'SET_CORE_CONNECTED'; payload: boolean }
+  | { type: 'SET_CORE_MESSAGE'; payload: any | null };
 
 // Load settings synchronously from launcherService to ensure onboardingCompleted 
 // and other persisted settings are available immediately on app start
@@ -101,6 +109,8 @@ const initialState: LauncherState = {
   error: null,
   isOnline: navigator.onLine,
   userPermissions: null,
+  isCoreConnected: false,
+  lastCoreMessage: null,
 };
 
 function launcherReducer(state: LauncherState, action: LauncherAction): LauncherState {
@@ -111,6 +121,10 @@ function launcherReducer(state: LauncherState, action: LauncherAction): Launcher
       return { ...state, error: action.payload, isLoading: false };
     case 'SET_ONLINE':
       return { ...state, isOnline: action.payload };
+    case 'SET_CORE_CONNECTED':
+      return { ...state, isCoreConnected: action.payload };
+    case 'SET_CORE_MESSAGE':
+      return { ...state, lastCoreMessage: action.payload };
     case 'SET_MODPACKS_DATA':
       return { ...state, modpacksData: action.payload, isLoading: false };
     case 'SET_LANGUAGE':
@@ -870,7 +884,7 @@ export function LauncherProvider({ children }: { children: ReactNode }) {
 
     // Verificar si el modpack requiere ZIP (no es vanilla/paper)
     // Only check for actions that need download from catalog (not reinstall - reads from instance metadata)
-    const isModrinthPack = (modpack as any).isModrinth || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(modpackId);
+    const isModrinthPack = (modpack as any)?.isModrinth || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(modpackId);
     if (modpack && !modpack.urlModpackZip && !isModrinthPack && (action === 'install' || action === 'update')) {
       if (modpack.ip) {
         // Es un servidor vanilla/paper, solo se puede "conectar"
@@ -966,6 +980,13 @@ export function LauncherProvider({ children }: { children: ReactNode }) {
 
       switch (action) {
         case 'install':
+          if (state.isCoreConnected) {
+            console.log('Sending install command to C++ native engine!');
+            // We use the fire-and-forget command
+            sendCoreCommand('install', { modpack_id: modpackId });
+            return true;
+          }
+
           // Start install in background - don't await so we can return immediately
           (async () => {
             try {
@@ -1047,6 +1068,16 @@ export function LauncherProvider({ children }: { children: ReactNode }) {
           }
           break;
         case 'launch': {
+          if (state.isCoreConnected) {
+            console.log('Sending launch command to C++ native engine!');
+            // Map Microsoft auth tokens over native bridge
+            sendCoreCommand('launch', { 
+              modpack_id: modpackId, 
+              auth: state.userSettings.microsoftAccount 
+            });
+            return true;
+          }
+
           // Check for mandatory username change
           if (state.userSettings.authMethod === 'offline' && state.userSettings.username === 'Player') {
             setShowUsernameDialog(true);
@@ -1757,6 +1788,88 @@ export function LauncherProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // Listen for LuminaCore events globally
+  useEffect(() => {
+    let unlisten: any = null;
+    const setupCoreListener = async () => {
+      try {
+        unlisten = await listen<string>('lumina-core-event', (event) => {
+          console.log('⚙️ LuminaCore C++ output:', event.payload);
+          try {
+            const data = JSON.parse(event.payload);
+            dispatch({ type: 'SET_CORE_MESSAGE', payload: data });
+            
+            if (data.status === 'ready') {
+              dispatch({ type: 'SET_CORE_CONNECTED', payload: true });
+              toast.success('Native C++ Backend Connected!');
+            } else if (data.status === 'pong') {
+              toast.success('C++ Engine responded to Ping!');
+            } else if (data.status === 'game_log') {
+              // Re-emit to the specific modpack log channel
+              emit(`minecraft-log-${data.modpack_id}`, data.message);
+            } else if (data.status === 'game_started') {
+              emit(`minecraft-started-${data.modpack_id}`, {});
+            } else if (data.status === 'game_finished') {
+              emit(`minecraft-exited-${data.modpack_id}`, { exit_code: data.exit_code });
+            } else if (data.status === 'launching_native') {
+              dispatch({
+                type: 'SET_MODPACK_STATE',
+                payload: {
+                  id: data.modpack_id,
+                  state: {
+                    ...state.modpackStates[data.modpack_id],
+                    status: 'launching',
+                    progress: 100
+                  }
+                }
+              });
+            }
+          } catch (e) {
+            console.log('C++ Log:', event.payload);
+          }
+        });
+      } catch (err) {
+        console.error('Failed to setup core listener:', err);
+      }
+    };
+    setupCoreListener();
+
+    // Auto-connect to C++ Native Engine immediately on boot
+    invoke('start_lumina_core').then(() => {
+      dispatch({ type: 'SET_CORE_CONNECTED', payload: true });
+      // We don't toast the success silently so we don't spam the user every startup
+      console.log('✅ Auto-connected to LuminaCore C++ Engine.');
+    }).catch(e => {
+      console.error('⚠️ Auto-connect failed for LuminaCore:', e);
+    });
+
+    return () => {
+      if (unlisten) unlisten();
+    };
+  }, []);
+
+  const startCore = async () => {
+    if (state.isCoreConnected) return;
+    try {
+      await invoke('start_lumina_core');
+      dispatch({ type: 'SET_CORE_CONNECTED', payload: true });
+      toast.success('Native C++ Backend Started!');
+    } catch (e) {
+      console.error('Failed to start C++ core:', e);
+      toast.error('C++ Backend initialization failed: ' + e);
+    }
+  };
+
+  const sendCoreCommand = async (action: string, payload: Record<string, any> = {}) => {
+    try {
+      const command = { action, ...payload };
+      await invoke('send_lumina_command', { commandJson: JSON.stringify(command) });
+    } catch (e) {
+      console.error('Failed to send command to C++:', e);
+      toast.error('C++ Engine is unreachable.');
+    }
+  };
+
   const contextValue: LauncherContextType = {
     modpacksData: state.modpacksData,
     modpackStates: state.modpackStates,
@@ -1784,6 +1897,10 @@ export function LauncherProvider({ children }: { children: ReactNode }) {
     isOnline: state.isOnline,
     userPermissions: state.userPermissions,
     refreshPermissions,
+    isCoreConnected: state.isCoreConnected,
+    lastCoreMessage: state.lastCoreMessage,
+    startCore,
+    sendCoreCommand,
   };
 
   // Update ref with refreshData so the cache-clear listener can call it

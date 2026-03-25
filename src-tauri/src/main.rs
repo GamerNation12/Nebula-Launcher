@@ -14,6 +14,7 @@ mod modpack;
 mod utils;
 mod oauth;
 mod parallel_download;
+mod lumina_core;
 
 use crate::launcher::launch_modpack_action;
 
@@ -1485,6 +1486,7 @@ fn main() {
 
     tauri::Builder::default()
         .manage(oauth::OAuthServerState::default())
+        .manage(lumina_core::CoreState(Mutex::new(None)))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_shell::init())
@@ -1541,8 +1543,9 @@ fn main() {
             toggle_mod_status,
             list_instance_worlds,
             list_instance_screenshots,
-            backup_instance_world,
             delete_instance_world,
+            lumina_core::start_lumina_core,
+            lumina_core::send_lumina_command,
         ])
         .setup(|app| {
             // Initialize app data directory
