@@ -9,7 +9,7 @@
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives",
     "preview": "vite preview",
     "tauri": "tauri",
-    "tauri:dev": "node scripts/check-linux-deps.js && tauri dev --no-watch",
+    "tauri:dev": "node scripts/kill-port.js && node scripts/check-linux-deps.js && tauri dev --no-watch",
     "tauri:dev-stable": "node scripts/kill-port.js 1420 && npm run tauri:dev",
     "tauri:dev-watch": "node scripts/check-linux-deps.js && tauri dev",
     "tauri:build": "node scripts/tauri-build.js",

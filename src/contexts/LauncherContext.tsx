@@ -870,7 +870,8 @@ export function LauncherProvider({ children }: { children: ReactNode }) {
 
     // Verificar si el modpack requiere ZIP (no es vanilla/paper)
     // Only check for actions that need download from catalog (not reinstall - reads from instance metadata)
-    if (modpack && !modpack.urlModpackZip && !(modpack as any).isModrinth && (action === 'install' || action === 'update')) {
+    const isModrinthPack = (modpack as any).isModrinth || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(modpackId);
+    if (modpack && !modpack.urlModpackZip && !isModrinthPack && (action === 'install' || action === 'update')) {
       if (modpack.ip) {
         // Es un servidor vanilla/paper, solo se puede "conectar"
         throw new Error(`Este es un servidor ${modpack.modloader}. IP: ${modpack.ip}`);

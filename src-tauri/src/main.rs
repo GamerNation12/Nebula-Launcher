@@ -1468,6 +1468,21 @@ fn main() {
         filesystem::list_instance_worlds(&modpack_id).map_err(|e| e.to_string())
     }
 
+    #[tauri::command]
+    async fn list_instance_screenshots(modpack_id: String) -> Result<Vec<serde_json::Value>, String> {
+        filesystem::list_instance_screenshots(&modpack_id).map_err(|e| e.to_string())
+    }
+
+    #[tauri::command]
+    async fn backup_instance_world(modpack_id: String, world_name: String) -> Result<String, String> {
+        filesystem::backup_instance_world(&modpack_id, &world_name).map_err(|e| e.to_string())
+    }
+
+    #[tauri::command]
+    async fn delete_instance_world(modpack_id: String, world_name: String) -> Result<(), String> {
+        filesystem::delete_instance_world(&modpack_id, &world_name).map_err(|e| e.to_string())
+    }
+
     tauri::Builder::default()
         .manage(oauth::OAuthServerState::default())
         .plugin(tauri_plugin_opener::init())
@@ -1525,6 +1540,9 @@ fn main() {
             list_instance_mods,
             toggle_mod_status,
             list_instance_worlds,
+            list_instance_screenshots,
+            backup_instance_world,
+            delete_instance_world,
         ])
         .setup(|app| {
             // Initialize app data directory

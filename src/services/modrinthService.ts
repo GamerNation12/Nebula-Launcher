@@ -22,9 +22,15 @@ export class ModrinthService {
    * @param version Minecraft version filter
    * @param loader Modloader filter
    */
-  async searchModpacks(query: string, limit: number = 20, offset: number = 0, index: string = 'relevance', version?: string, loader?: string): Promise<Modpack[]> {
+  async searchModpacks(query: string, limit: number = 20, offset: number = 0, index: string = 'relevance', version?: string, loader?: string, categories: string[] = []): Promise<Modpack[]> {
     try {
       const facetList: string[][] = [['project_type:modpack']];
+      
+      if (categories && categories.length > 0) {
+        categories.forEach(cat => {
+          facetList.push([`categories:${cat.toLowerCase()}`]);
+        });
+      }
 
       if (version && version.trim() !== '') {
         facetList.push([`versions:${version}`]);

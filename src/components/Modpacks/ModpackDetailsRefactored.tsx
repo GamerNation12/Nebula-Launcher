@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ArrowLeft, Download, Clock, Users, Terminal, Info, Image, History, Loader2, Package, Globe } from 'lucide-react';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 import LogsSection from './Details/Sections/LogsSection';
 import ScreenshotsSection from './Details/Sections/ScreenshotsSection';
 import VersionsSection from './Details/Sections/VersionsSection';
@@ -12,6 +12,7 @@ import type { Modpack, ModpackState, ProgressInfo } from '../../types/launcher';
 import { useLauncher } from '../../contexts/LauncherContext';
 import { useAnimation } from '../../contexts/AnimationContext';
 import LauncherService from '../../services/launcherService';
+import { ModrinthService } from '../../services/modrinthService';
 import ReactMarkdown from 'react-markdown';
 
 import ModpackActions from './Details/ModpackActions';
@@ -55,8 +56,11 @@ const ModpackDetailsRefactored: React.FC<ModpackDetailsProps> = ({ modpack, stat
 
   const liveState = modpackStates[modpack.id] || state;
 
+  const isValidUUID = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+
   // Logs state
   const [logs, setLogs] = React.useState<string[]>([]);
+  const [localScreenshots, setLocalScreenshots] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<'content' | 'logs' | 'screenshots' | 'versions' | 'mods' | 'worlds'>('content');
 
   // Stats state
@@ -93,6 +97,27 @@ const ModpackDetailsRefactored: React.FC<ModpackDetailsProps> = ({ modpack, stat
     loadMetadata();
   }, [liveState.installed, liveState.status, modpack.id]);
 
+  // Load local screenshots when component mounts and is installed
+  useEffect(() => {
+    const loadScreenshots = async () => {
+      if (liveState.installed) {
+        try {
+          const screenshotsList = await invoke<any[]>('list_instance_screenshots', {
+            modpackId: modpack.id
+          });
+          
+          const urls = screenshotsList.map(item => convertFileSrc(item.path));
+          setLocalScreenshots(urls);
+        } catch (error) {
+          console.error('Failed to load local screenshots:', error);
+        }
+      } else {
+        setLocalScreenshots([]);
+      }
+    };
+    loadScreenshots();
+  }, [modpack.id, liveState.installed]);
+
   // Load stats from database
   useEffect(() => {
     const loadStats = async () => {
@@ -103,10 +128,25 @@ const ModpackDetailsRefactored: React.FC<ModpackDetailsProps> = ({ modpack, stat
           launcherService.getUserModpackStats(modpack.id)
         ]);
 
+        let totalDownloads = modpackStats?.totalDownloads || 0;
+        let activePlayers = modpackStats?.activePlayers || 0;
+
+        // Fallback to Modrinth stats for non-UUID (imported) modpacks
+        if (!modpackStats && !isValidUUID(modpack.id)) {
+          try {
+            const details = await ModrinthService.getInstance().getModpackDetails(modpack.id);
+            if (details) {
+              totalDownloads = details.downloads || 0;
+            }
+          } catch (e) {
+            console.error('Failed to load Modrinth fallback stats:', e);
+          }
+        }
+
         setStats({
-          totalDownloads: modpackStats?.totalDownloads || 0,
+          totalDownloads,
           totalPlaytime: modpackStats?.totalPlaytime || 0,
-          activePlayers: modpackStats?.activePlayers || 0,
+          activePlayers,
           userPlaytime: userStats?.playtimeHours || 0
         });
       } catch (error) {
@@ -237,7 +277,7 @@ const ModpackDetailsRefactored: React.FC<ModpackDetailsProps> = ({ modpack, stat
         {statsDisplay.map((stat, index) => (
           <div
             key={index}
-            className={`bg-dark-800 rounded-xl p-4 border border-dark-700 group ${getAnimationClass('hover:border-lumina-400/50 transition-all duration-75', 'hover:scale-105')
+            className={`bg-dark-800/40 backdrop-blur-md rounded-xl p-4 border border-white/5 group shadow-lg ${getAnimationClass('hover:border-lumina-400/30 hover:bg-dark-800/60 transition-all duration-150', 'hover:scale-105')
               }`}
             style={getAnimationStyle({
               animation: `fadeInUp 0.15s ease-out ${index * 0.02}s backwards`
@@ -279,7 +319,20 @@ const ModpackDetailsRefactored: React.FC<ModpackDetailsProps> = ({ modpack, stat
   );
 
   return (
-    <div className="h-full w-full bg-dark-900 flex flex-col relative">
+    <div className="h-full w-full bg-dark-950 flex flex-col relative overflow-hidden">
+      {/* Dynamic Blur Backdrop */}
+      {modpack.backgroundImage && (
+        <div 
+          className="absolute inset-x-0 top-0 bottom-0 z-0 overflow-hidden pointer-events-none opacity-40"
+          style={{
+            backgroundImage: `url(${modpack.backgroundImage})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            filter: 'blur(70px) brightness(0.5)',
+            transform: 'scale(1.1)',
+          }}
+        />
+      )}
       {/* Back button - Fixed position */}
       <button
         onClick={onBack}
@@ -415,7 +468,7 @@ const ModpackDetailsRefactored: React.FC<ModpackDetailsProps> = ({ modpack, stat
             <div className="lg:col-span-2 space-y-8">
               {/* Tab Navigation */}
               <div
-                className={`flex space-x-1 bg-dark-800 p-1 rounded-lg ${getAnimationClass('transition-all duration-75')
+                className={`flex space-x-1 bg-dark-800/40 backdrop-blur-md border border-white/5 p-1.5 rounded-xl ${getAnimationClass('transition-all duration-75')
                   }`}
                 style={getAnimationStyle({
                   animation: `fadeInUp 0.15s ease-out 0.05s backwards`
@@ -423,9 +476,9 @@ const ModpackDetailsRefactored: React.FC<ModpackDetailsProps> = ({ modpack, stat
               >
                 <button
                   onClick={() => setActiveTab('content')}
-                  className={`flex items-center space-x-2 px-4 py-2 rounded-md font-medium transition-all duration-75 ${activeTab === 'content'
-                    ? 'bg-emerald-600 text-white shadow-lg'
-                    : 'text-dark-300 hover:text-white hover:bg-dark-700'
+                  className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-all duration-150 ${activeTab === 'content'
+                    ? 'bg-lumina-600 text-white shadow-lg'
+                    : 'text-dark-300 hover:text-white hover:bg-white/5'
                     }`}
                 >
                   <Info className="w-4 h-4" />
@@ -435,9 +488,9 @@ const ModpackDetailsRefactored: React.FC<ModpackDetailsProps> = ({ modpack, stat
                 {isReadOnly && (
                   <button
                     onClick={() => setActiveTab('screenshots')}
-                    className={`flex items-center space-x-2 px-4 py-2 rounded-md font-medium transition-all duration-75 ${activeTab === 'screenshots'
-                      ? 'bg-emerald-600 text-white shadow-lg'
-                      : 'text-dark-300 hover:text-white hover:bg-dark-700'
+                    className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-all duration-150 ${activeTab === 'screenshots'
+                      ? 'bg-lumina-600 text-white shadow-lg'
+                      : 'text-dark-300 hover:text-white hover:bg-white/5'
                       }`}
                   >
                     <Image className="w-4 h-4" />
@@ -453,9 +506,9 @@ const ModpackDetailsRefactored: React.FC<ModpackDetailsProps> = ({ modpack, stat
                 {!isReadOnly && (
                   <button
                     onClick={() => setActiveTab('logs')}
-                    className={`flex items-center space-x-2 px-4 py-2 rounded-md font-medium transition-all duration-75 ${activeTab === 'logs'
+                    className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-all duration-150 ${activeTab === 'logs'
                       ? 'bg-lumina-600 text-white shadow-lg'
-                      : 'text-dark-300 hover:text-white hover:bg-dark-700'
+                      : 'text-dark-300 hover:text-white hover:bg-white/5'
                       }`}
                   >
                     <Terminal className="w-4 h-4" />
@@ -472,9 +525,9 @@ const ModpackDetailsRefactored: React.FC<ModpackDetailsProps> = ({ modpack, stat
                   <>
                     <button
                       onClick={() => setActiveTab('mods')}
-                      className={`flex items-center space-x-2 px-4 py-2 rounded-md font-medium transition-all duration-75 ${activeTab === 'mods'
+                      className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-all duration-150 ${activeTab === 'mods'
                         ? 'bg-lumina-600 text-white shadow-lg'
-                        : 'text-dark-300 hover:text-white hover:bg-dark-700'
+                        : 'text-dark-300 hover:text-white hover:bg-white/5'
                         }`}
                     >
                       <Package className="w-4 h-4" />
@@ -482,13 +535,23 @@ const ModpackDetailsRefactored: React.FC<ModpackDetailsProps> = ({ modpack, stat
                     </button>
                     <button
                       onClick={() => setActiveTab('worlds')}
-                      className={`flex items-center space-x-2 px-4 py-2 rounded-md font-medium transition-all duration-75 ${activeTab === 'worlds'
+                      className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-all duration-150 ${activeTab === 'worlds'
                         ? 'bg-lumina-600 text-white shadow-lg'
-                        : 'text-dark-300 hover:text-white hover:bg-dark-700'
+                        : 'text-dark-300 hover:text-white hover:bg-white/5'
                         }`}
                     >
                       <Globe className="w-4 h-4" />
                       <span>{t('modpacks.worlds', 'Worlds')}</span>
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('screenshots')}
+                      className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-all duration-150 ${activeTab === 'screenshots'
+                        ? 'bg-lumina-600 text-white shadow-lg'
+                        : 'text-dark-300 hover:text-white hover:bg-white/5'
+                        }`}
+                    >
+                      <Image className="w-4 h-4" />
+                      <span>{t('modpacks.screenshots.title', 'Screenshots')}</span>
                     </button>
                   </>
                 )}
@@ -511,7 +574,12 @@ const ModpackDetailsRefactored: React.FC<ModpackDetailsProps> = ({ modpack, stat
               <div className="min-h-[400px]">
                 {activeTab === 'content' && renderContentTab()}
                 {activeTab === 'logs' && <LogsSection logs={logs} modpackId={modpack.id} />}
-                {activeTab === 'screenshots' && <ScreenshotsSection images={modpack.images} modpackName={displayName} />}
+                {activeTab === 'screenshots' && (
+                  <ScreenshotsSection 
+                    images={localScreenshots.length > 0 ? localScreenshots : modpack.images} 
+                    modpackName={modpack.name} 
+                  />
+                )}
                 {activeTab === 'mods' && <ModsSection modpackId={modpack.id} />}
                 {activeTab === 'worlds' && <WorldsSection modpackId={modpack.id} />}
                 {activeTab === 'versions' && (

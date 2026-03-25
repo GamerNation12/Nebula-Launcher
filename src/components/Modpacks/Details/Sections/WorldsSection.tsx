@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Loader2, Globe } from 'lucide-react';
+import { Loader2, Globe, Archive, Trash2 } from 'lucide-react';
 import { useAnimation } from '../../../../contexts/AnimationContext';
+import ConfirmDialog from '../../../../components/ConfirmDialog';
 import { invoke } from '@tauri-apps/api/core';
 import toast from 'react-hot-toast';
 
@@ -19,6 +20,38 @@ const WorldsSection: React.FC<WorldsSectionProps> = ({ modpackId }) => {
   const { getAnimationClass, getAnimationStyle } = useAnimation();
   const [worlds, setWorlds] = useState<WorldItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [backingUp, setBackingUp] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const [worldToDelete, setWorldToDelete] = useState<string | null>(null);
+
+  const handleBackup = async (worldName: string) => {
+    try {
+      setBackingUp(worldName);
+      const zipPath = await invoke<string>('backup_instance_world', { modpackId, worldName });
+      toast.success(`Backup created: ${zipPath}`);
+    } catch (err) {
+      console.error('Backup failed:', err);
+      toast.error('Failed to create backup');
+    } finally {
+      setBackingUp(null);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!worldToDelete) return;
+    try {
+      setDeleting(worldToDelete);
+      await invoke('delete_instance_world', { modpackId, worldName: worldToDelete });
+      toast.success(`World deleted: ${worldToDelete}`);
+      setWorlds(prev => prev.filter(w => w.name !== worldToDelete));
+    } catch (err) {
+      console.error('Delete failed:', err);
+      toast.error('Failed to delete world');
+    } finally {
+      setDeleting(null);
+      setWorldToDelete(null);
+    }
+  };
 
   const fetchWorlds = async () => {
     try {
@@ -93,9 +126,54 @@ const WorldsSection: React.FC<WorldsSectionProps> = ({ modpackId }) => {
                   {t('modpacks.lastPlayed', { defaultValue: 'Last Played' })}: {formatDate(world.last_played)}
                 </p>
               </div>
+
+              <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleBackup(world.name);
+                  }}
+                  disabled={!!backingUp || !!deleting}
+                  className="p-1.5 hover:bg-dark-700 bg-dark-800/10 rounded-lg text-dark-300 hover:text-lumina-400 transition-colors disabled:opacity-50"
+                  title="Create Backup"
+                >
+                  {backingUp === world.name ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Archive className="w-4 h-4" />
+                  )}
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setWorldToDelete(world.name);
+                  }}
+                  disabled={!!backingUp || !!deleting}
+                  className="p-1.5 hover:bg-red-900/20 bg-dark-800/10 rounded-lg text-dark-300 hover:text-red-400 transition-colors disabled:opacity-50"
+                  title="Delete World"
+                >
+                  {deleting === world.name ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="w-4 h-4" />
+                  )}
+                </button>
+              </div>
             </div>
           ))}
         </div>
+      )}
+
+      {worldToDelete && (
+        <ConfirmDialog
+          title="Delete World"
+          message={`Are you sure you want to delete "${worldToDelete}"? This action cannot be undone.`}
+          confirmText="Delete"
+          cancelText="Cancel"
+          onConfirm={handleDelete}
+          onCancel={() => setWorldToDelete(null)}
+          type="danger"
+        />
       )}
     </div>
   );

@@ -592,7 +592,8 @@ class LauncherService {
 
       const modpack = this.modpacksData?.modpacks.find((m: any) => m.id === modpackId);
       if (!modpack) {
-        return 'error';
+        // Fallback for custom or imported modpacks
+        return 'installed';
       }
 
       if (metadata.version !== modpack.version) {
@@ -1014,12 +1015,12 @@ class LauncherService {
           throw error;
         }
 
-        const repairError = new Error(`Error durante la reparación: ${originalMessage}`);
+        const repairError = new Error(`Repair failed: ${originalMessage}`);
         repairError.stack = error.stack;
         throw repairError;
       }
 
-      throw new Error(`Error durante la reparación del modpack: ${String(error)}`);
+      throw new Error(`Repair failed for modpack: ${String(error)}`);
     } finally {
       // Clean up event listener
       if (unlistenProgress) {
@@ -1072,12 +1073,12 @@ class LauncherService {
           throw error;
         }
 
-        const reinstallError = new Error(`Error durante la reinstalación: ${originalMessage}`);
+        const reinstallError = new Error(`Reinstall failed: ${originalMessage}`);
         reinstallError.stack = error.stack;
         throw reinstallError;
       }
 
-      throw new Error(`Error durante la reinstalación del modpack: ${String(error)}`);
+      throw new Error(`Reinstall failed for modpack: ${String(error)}`);
     }
   }
 

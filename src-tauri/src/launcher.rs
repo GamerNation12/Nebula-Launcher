@@ -7,6 +7,7 @@ use anyhow::{Result, anyhow};
 use dirs::data_dir;
 
 use serde_json;
+use reqwest;
 
 /// Install a modpack to the instances directory
 pub async fn install_modpack(modpack: Modpack) -> Result<()> {
@@ -220,6 +221,9 @@ where
     // Variable to store recommended RAM from manifest
     // Variable to store recommended RAM from manifest
     let mut recommended_ram_from_manifest: Option<u32> = None;
+    let mut active_modloader = modpack.modloader.clone();
+    let mut active_modloader_version = modpack.modloader_version.clone();
+    let mut active_minecraft_version = modpack.minecraft_version.clone();
     
     // Variables to store modpack processing results
     let mut zip_hash_calculated: Option<String> = None;
@@ -364,6 +368,10 @@ where
             None
         };
 
+        active_modloader = modpack.modloader.clone();
+        active_modloader_version = modpack.modloader_version.clone();
+        active_minecraft_version = modpack.minecraft_version.clone();
+
         // Check if it's a CurseForge modpack (manifest.json) or Modrinth modpack (modrinth.index.json)
         let is_modrinth_modpack = match lyceris::util::extract::read_file_from_jar(&temp_zip_path, "modrinth.index.json") {
             Ok(_) => true,
@@ -396,6 +404,25 @@ where
                 do_aggressive_cleanup,
                 settings.max_concurrent_downloads.map(|v| v as usize),
             ).await?;
+
+            active_modloader = _mr_modloader;
+            active_modloader_version = _mr_loader_version;
+            active_minecraft_version = _mr_mc_version;
+
+            if active_modloader == "fabric" && active_modloader_version == "latest" {
+                println!("🔍 Resolving Fabric 'latest' version dynamically...");
+                match reqwest::get("https://meta.fabricmc.net/v2/versions/loader").await {
+                    Ok(res) => {
+                        if let Ok(json) = res.json::<serde_json::Value>().await {
+                            if let Some(version) = json[0]["version"].as_str() {
+                                active_modloader_version = version.to_string();
+                                println!("🔧 Resolved Fabric 'latest' to {}", active_modloader_version);
+                            }
+                        }
+                    }
+                    Err(e) => eprintln!("⚠️ Warning: Failed to resolve Fabric latest: {}", e)
+                }
+            }
 
             managed_files_set = managed_files;
 
@@ -431,6 +458,9 @@ where
                 do_aggressive_cleanup,
                 settings.max_concurrent_downloads.map(|v| v as usize),
             ).await?;
+
+            active_modloader = _cf_modloader;
+            active_modloader_version = _cf_version;
 
             managed_files_set = managed_files;
 
@@ -486,9 +516,9 @@ where
         name: modpack.name.clone(),
         version: modpack.version.clone(),
         installed_at: chrono::Utc::now().to_rfc3339(),
-        modloader: modpack.modloader.clone(),
-        modloader_version: modpack.modloader_version.clone(),
-        minecraft_version: modpack.minecraft_version.clone(),
+        modloader: active_modloader,
+        modloader_version: active_modloader_version,
+        minecraft_version: active_minecraft_version,
         recommended_ram: recommended_ram_from_manifest,
         ram_allocation: Some(if recommended_ram_from_manifest.is_some() { "recommended".to_string() } else { "global".to_string() }),
         custom_ram: None,

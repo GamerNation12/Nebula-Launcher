@@ -940,4 +940,144 @@ pub fn list_instance_worlds(modpack_id: &str) -> Result<Vec<serde_json::Value>> 
 
     Ok(worlds_list)
 }
+
+/// Backup a specific world to instance backups/ folder
+pub fn backup_instance_world(modpack_id: &str, world_name: &str) -> Result<String> {
+    use std::io::{Read, Write};
+
+    let instance_dir = get_instance_dir(modpack_id)?;
+    if !instance_dir.exists() {
+        return Err(anyhow!("Instance not found"));
+    }
+
+    let saves_dir = if instance_dir.join(".minecraft").join("saves").exists() {
+        instance_dir.join(".minecraft").join("saves")
+    } else {
+        instance_dir.join("saves")
+    };
+
+    let world_dir = saves_dir.join(world_name);
+    if !world_dir.exists() {
+        return Err(anyhow!("World not found: {}", world_name));
+    }
+
+    let backups_dir = instance_dir.join("backups");
+    if !backups_dir.exists() {
+        std::fs::create_dir_all(&backups_dir)?;
+    }
+
+    let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S").to_string();
+    let zip_filename = format!("{}_{}.zip", world_name, timestamp);
+    let zip_path = backups_dir.join(&zip_filename);
+
+    let file = std::fs::File::create(&zip_path)?;
+    let mut zip = zip::ZipWriter::new(file);
+
+    let options = zip::write::SimpleFileOptions::default()
+        .compression_method(zip::CompressionMethod::Deflated);
+
+    let mut buffer = Vec::new();
+
+    for entry in walkdir::WalkDir::new(&world_dir) {
+        let entry = entry?;
+        let path = entry.path();
+        let name = path.strip_prefix(&world_dir)?.to_str().unwrap_or("").replace("\\", "/");
+
+        if name.is_empty() {
+            continue;
+        }
+
+        if path.is_file() {
+            zip.start_file(name, options)?;
+            let mut f = std::fs::File::open(path)?;
+            f.read_to_end(&mut buffer)?;
+            zip.write_all(&buffer)?;
+            buffer.clear();
+        } else if path.is_dir() {
+            zip.add_directory(name, options)?;
+        }
+    }
+
+    zip.finish()?;
+    Ok(zip_filename)
+}
+
+/// Delete a specific world from the instance saves folder
+pub fn delete_instance_world(modpack_id: &str, world_name: &str) -> Result<()> {
+    let instance_dir = get_instance_dir(modpack_id)?;
+    if !instance_dir.exists() {
+        return Err(anyhow!("Instance not found"));
+    }
+
+    let saves_dir = if instance_dir.join(".minecraft").join("saves").exists() {
+        instance_dir.join(".minecraft").join("saves")
+    } else {
+        instance_dir.join("saves")
+    };
+
+    let world_dir = saves_dir.join(world_name);
+    if !world_dir.exists() {
+        return Err(anyhow!("World not found: {}", world_name));
+    }
+
+    std::fs::remove_dir_all(&world_dir)?;
+    Ok(())
+}
+
+/// List screenshots in the given instance
+pub fn list_instance_screenshots(modpack_id: &str) -> Result<Vec<serde_json::Value>> {
+    let instance_dir = get_instance_dir(modpack_id)?;
+    if !instance_dir.exists() {
+        return Err(anyhow!("Instance not found"));
+    }
+
+    let screenshots_dir = if instance_dir.join(".minecraft").join("screenshots").exists() {
+        instance_dir.join(".minecraft").join("screenshots")
+    } else {
+        instance_dir.join("screenshots")
+    };
+
+    if !screenshots_dir.exists() {
+        return Ok(Vec::new());
+    }
+
+    let mut screenshots_list = Vec::new();
+    let entries = fs::read_dir(screenshots_dir)?;
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        
+        // Ensure it's a file with extension .png
+        if path.is_file() {
+            if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+                if ext.to_lowercase() == "png" {
+                    if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
+                        let metadata = fs::metadata(&path)?;
+                        let modified = metadata.modified()?;
+                        let datetime: chrono::DateTime<chrono::Utc> = modified.into();
+                        let size = metadata.len();
+                        
+                        screenshots_list.push(serde_json::json!({
+                            "name": filename.to_string(),
+                            "path": path.to_string_lossy().to_string(),
+                            "size": size,
+                            "date": datetime.to_rfc3339()
+                        }));
+                    }
+                }
+            }
+        }
+    }
+
+    // Sort by date descending (newest first)
+    if !screenshots_list.is_empty() {
+        screenshots_list.sort_by(|a, b| {
+            let date_a = a["date"].as_str().unwrap_or("");
+            let date_b = b["date"].as_str().unwrap_or("");
+            date_b.cmp(date_a)
+        });
+    }
+
+    Ok(screenshots_list)
+}
  

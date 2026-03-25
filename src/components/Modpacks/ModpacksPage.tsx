@@ -8,6 +8,7 @@ import ModrinthListCard from './ModrinthListCard';
 import ModpackDetailsRefactored from './ModpackDetailsRefactored';
 import LauncherService from '../../services/launcherService';
 import { ModrinthService } from '../../services/modrinthService';
+import { CurseForgeService } from '../../services/curseforgeService';
 
 import type { Modpack } from '../../types/launcher';
 
@@ -31,11 +32,13 @@ const ModpacksPage: React.FC<ModpacksPageProps> = ({ initialModpackId, onNavigat
   const [selectedModpackDetails, setSelectedModpackDetails] = useState<Modpack | null>(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [source, setSource] = useState<'local' | 'modrinth'>('modrinth');
+  const [source, setSource] = useState<'modrinth' | 'curseforge'>('modrinth');
   const [modrinthModpacks, setModrinthModpacks] = useState<Modpack[]>([]);
   const [isRemoteLoading, setIsRemoteLoading] = useState(false);
   const [selectedVersion, setSelectedVersion] = useState<string>('');
   const [selectedLoader, setSelectedLoader] = useState<string>('');
+  const [sortIndex, setSortIndex] = useState<'relevance' | 'downloads' | 'follows' | 'newest' | 'updated'>('relevance');
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
 
   const [isRefreshAnimating, setIsRefreshAnimating] = useState(false);
   const [showingDetails, setShowingDetails] = useState(false);
@@ -62,23 +65,36 @@ const ModpacksPage: React.FC<ModpacksPageProps> = ({ initialModpackId, onNavigat
     }
   }, [initialModpackId, modpacksData]);
 
-  // Modrinth Live Search Trigger
+  // Live Search Trigger
   React.useEffect(() => {
-    if (source !== 'modrinth') return;
-
     const delayDebounceFn = setTimeout(async () => {
       setIsRemoteLoading(true);
       setOffset(0); // Reset offset on filter change
       setHasMore(true);
       try {
-        const results = await ModrinthService.getInstance().searchModpacks(
-          searchTerm, 
-          20, 
-          0,
-          'relevance',
-          selectedVersion, 
-          selectedLoader
-        );
+        let results = [];
+        if (source === 'modrinth') {
+          results = await ModrinthService.getInstance().searchModpacks(
+            searchTerm, 
+            20, 
+            0,
+            sortIndex,
+            selectedVersion, 
+            selectedLoader,
+            selectedCategories
+          );
+        } else {
+          // Curseforge sort indices: 2 = Popularity, 1 = Featured, 5 = Last Updated
+          const cfSort = sortIndex === 'downloads' ? 2 : sortIndex === 'newest' ? 5 : 2;
+          results = await CurseForgeService.getInstance().searchModpacks(
+            searchTerm,
+            20,
+            0,
+            cfSort,
+            selectedVersion,
+            selectedLoader
+          );
+        }
         setModrinthModpacks(results);
         if (results.length < 20) {
           setHasMore(false);
@@ -91,21 +107,37 @@ const ModpacksPage: React.FC<ModpacksPageProps> = ({ initialModpackId, onNavigat
     }, 400); // 400ms debounce
 
     return () => clearTimeout(delayDebounceFn);
-  }, [searchTerm, source, selectedVersion, selectedLoader]);
+  }, [searchTerm, selectedVersion, selectedLoader, sortIndex, selectedCategories, source]);
 
   const loadMoreModpacks = async () => {
     if (isRemoteLoadingMore || !hasMore) return;
     setIsRemoteLoadingMore(true);
     try {
       const nextOffset = offset + 20;
-      const results = await ModrinthService.getInstance().searchModpacks(
-        searchTerm,
-        20,
-        nextOffset,
-        'relevance',
-        selectedVersion,
-        selectedLoader
-      );
+      let results = [];
+      
+      if (source === 'modrinth') {
+        results = await ModrinthService.getInstance().searchModpacks(
+          searchTerm,
+          20,
+          nextOffset,
+          sortIndex,
+          selectedVersion,
+          selectedLoader,
+          selectedCategories
+        );
+      } else {
+        const cfSort = sortIndex === 'downloads' ? 2 : sortIndex === 'newest' ? 5 : 2;
+        results = await CurseForgeService.getInstance().searchModpacks(
+          searchTerm,
+          20,
+          nextOffset,
+          cfSort,
+          selectedVersion,
+          selectedLoader
+        );
+      }
+
       setModrinthModpacks(prev => [...prev, ...results]);
       setOffset(nextOffset);
       if (results.length < 20) {
@@ -304,6 +336,39 @@ const ModpacksPage: React.FC<ModpacksPageProps> = ({ initialModpackId, onNavigat
               />
             </div>
 
+            <div className="flex bg-dark-800/80 p-0.5 rounded-lg border border-dark-700/60 ml-2">
+              <button
+                onClick={() => setSource('modrinth')}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${source === 'modrinth'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-dark-400 hover:text-white'
+                  }`}
+              >
+                Modrinth
+              </button>
+              <button
+                onClick={() => setSource('curseforge')}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${source === 'curseforge'
+                  ? 'bg-amber-600 text-white shadow-sm'
+                  : 'text-dark-400 hover:text-white'
+                  }`}
+              >
+                CurseForge
+              </button>
+            </div>
+
+            <select
+              value={sortIndex}
+              onChange={(e) => setSortIndex(e.target.value as any)}
+              className="bg-dark-800 border border-dark-700/80 rounded-lg p-2.5 text-white text-sm focus:ring-1 focus:ring-lumina-500 outline-none"
+            >
+              <option value="relevance">Sort: Relevance</option>
+              <option value="downloads">Sort: Downloads</option>
+              <option value="follows">Sort: Followers</option>
+              <option value="newest">Sort: Newest</option>
+              <option value="updated">Sort: Updated</option>
+            </select>
+
             <button
               onClick={handleRefresh}
               disabled={isLoading || hasActiveInstallation}
@@ -384,6 +449,33 @@ const ModpacksPage: React.FC<ModpacksPageProps> = ({ initialModpackId, onNavigat
                         }`}
                     >
                       {loader.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <h3 className="text-xs font-bold text-dark-400 uppercase tracking-wider mb-3">Categories</h3>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    'Adventure', 'Magic', 'Tech', 'Exploration', 'Quest', 
+                    'Optimization', 'Multiplayer', 'Vanilla+'
+                  ].map(cat => (
+                    <button
+                      key={cat}
+                      onClick={() => {
+                        setSelectedCategories(prev => 
+                          prev.includes(cat) 
+                            ? prev.filter(c => c !== cat) 
+                            : [...prev, cat]
+                        );
+                      }}
+                      className={`px-2.5 py-1.5 rounded-lg text-xs transition-colors border ${selectedCategories.includes(cat)
+                        ? 'bg-lumina-500/20 text-lumina-400 border-lumina-500/40 font-medium'
+                        : 'bg-dark-700/40 text-dark-300 border-dark-700 hover:bg-dark-700/80 hover:text-white'
+                      }`}
+                    >
+                      {cat}
                     </button>
                   ))}
                 </div>
