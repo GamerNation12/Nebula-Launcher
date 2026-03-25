@@ -28,6 +28,7 @@ private slots:
     void onLoadFailed(const QString &error);
     void onOpenModpackDetail(const Modpack &pack);
 
+private:
     QWidget *centralWidget;
     QHBoxLayout *mainLayout; // Sidebar + Content area
     
